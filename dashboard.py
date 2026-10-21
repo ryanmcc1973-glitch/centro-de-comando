@@ -104,10 +104,23 @@ def carregar_trades_firebase():
     try:
         res = requests.get(url, timeout=5).json()
         if res:
-            # Pega a lista de valores do Firebase
-            lista_trades = list(res.values())
-            # OPÇÃO: Descomente a linha abaixo se quiser mostrar APENAS os trades mais recentes
-            lista_trades = lista_trades[-10:] 
+            # Pega os itens do dicionário (onde a chave é o ID do trade)
+            items = list(res.items())
+            
+            # Função para extrair o timestamp (a hora exata) do final do nome do trade
+            def extrair_timestamp(item):
+                try:
+                    # Pega o número no final do ID (ex: TIA_USDT_1792536612 -> 1792536612)
+                    return int(item[0].split('_')[-1])
+                except:
+                    return 0
+                    
+            # Ordena a lista do trade mais antigo para o mais novo
+            items.sort(key=extrair_timestamp)
+            
+            # Pega apenas os 10 trades mais recentes (os últimos da lista ordenada)
+            lista_trades = [item[1] for item in items[-10:]]
+            
             return lista_trades
         return []
     except Exception as e:
