@@ -107,7 +107,7 @@ def carregar_trades_firebase():
             # Pega a lista de valores do Firebase
             lista_trades = list(res.values())
             # OPÇÃO: Descomente a linha abaixo se quiser mostrar APENAS os trades mais recentes
-            # lista_trades = lista_trades[-10:] 
+            lista_trades = lista_trades[-10:] 
             return lista_trades
         return []
     except Exception as e:
