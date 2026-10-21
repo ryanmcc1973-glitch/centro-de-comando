@@ -5,9 +5,6 @@ import requests
 import os
 from datetime import datetime
 
-# ==========================================
-# CONFIGURAÇÃO DA PÁGINA (Visual)
-# ==========================================
 st.set_page_config(page_title="Painel de Trades", layout="wide", page_icon="📈")
 
 st.markdown("""
@@ -24,9 +21,6 @@ st.markdown("""
 
 st.title("📈 Meu Centro de Comando (Tempo Real)")
 
-# ==========================================
-# FUNÇÃO: PUXAR PREÇO REAL DA MEXC
-# ==========================================
 def obter_preco_atual(ativo):
     simbolo_mexc = ativo.replace("/", "_")
     url = f"https://contract.mexc.com/api/v1/contract/ticker?symbol={simbolo_mexc}"
@@ -34,19 +28,15 @@ def obter_preco_atual(ativo):
         res = requests.get(url, timeout=5).json()
         if res['success']:
             return float(res['data']['lastPrice'])
-    except Exception as e:
+    except Exception:
         pass
     return None
 
-# ==========================================
-# LER OS DADOS DO FIREBASE (NUVEM)
-# ==========================================
 def carregar_trades_firebase():
     url = "https://robos-marcello-default-rtdb.firebaseio.com/trades.json"
     try:
         res = requests.get(url, timeout=5).json()
         if res:
-            # Transforma o dicionário do Firebase em uma lista
             return list(res.values())
         return []
     except Exception as e:
@@ -55,25 +45,22 @@ def carregar_trades_firebase():
 
 trades = carregar_trades_firebase()
 
-# ==========================================
-# CONSTRUÇÃO DOS CARDS (Frontend)
-# ==========================================
 if not trades:
     st.info("Nenhum trade aberto no momento. Os robôs estão vigiando o mercado.")
 else:
     for trade in trades:
-        # Pega o preço atual na MEXC. Se for um teste que não existe lá, ele ignora.
-        preco_atual = obter_preco_atual(trade["ativo"])
+        preco_atual = obter_preco_atual(trade.get("ativo", ""))
         
         if preco_atual is None:
-            st.warning(f"Não foi possível obter o preço de {trade['ativo']} na MEXC. (Pode ser um ativo de teste).")
             continue
 
-        entrada = trade["entrada"]
-        alvo = trade["alvo"]
+        entrada = float(trade.get("entrada", 0))
+        alvo = float(trade.get("alvo", 0))
         
-        # Cálculo do Progresso
-        if trade["direcao"] == "LONG":
+        if entrada == 0 or alvo == 0:
+            continue
+
+        if trade.get("direcao") == "LONG":
             progresso = ((preco_atual - entrada) / (alvo - entrada)) * 100 if alvo > entrada else 0
             pnl_pct = ((preco_atual - entrada) / entrada) * 100
         else:
@@ -82,8 +69,8 @@ else:
             
         progresso_barra = max(0.0, min(100.0, progresso))
         
-        card_class = "trade-card" if trade["direcao"] == "LONG" else "trade-card trade-card-short"
-        emoji_seta = "🟢" if trade["direcao"] == "LONG" else "🔴"
+        card_class = "trade-card" if trade.get("direcao") == "LONG" else "trade-card trade-card-short"
+        emoji_seta = "🟢" if trade.get("direcao") == "LONG" else "🔴"
         pnl_class = "pnl" if pnl_pct >= 0 else "pnl pnl-negative"
         
         with st.container():
@@ -92,14 +79,15 @@ else:
             col_imagem, col1, col2, col3 = st.columns([1, 3, 2, 2])
             
             with col_imagem:
-                if os.path.exists(trade["imagem"]):
-                    st.image(trade["imagem"], width=70)
+                img_nome = trade.get("imagem", "alpha.png")
+                if os.path.exists(img_nome):
+                    st.image(img_nome, width=70)
                 else:
                     st.markdown("<h1 style='text-align: center;'>🤖</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; font-size:12px; color:#aaa;'>{trade['robo']}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; font-size:12px; color:#aaa;'>{trade.get('robo', 'Robô')}</p>", unsafe_allow_html=True)
 
             with col1:
-                st.markdown(f'<p class="title">{emoji_seta} {trade["ativo"]} ({trade["direcao"]})</p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="title">{emoji_seta} {trade.get("ativo", "Ativo")} ({trade.get("direcao", "")})</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="info">Entrada: {entrada}</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="info">Preço Atual: {preco_atual} 🔄</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="info">Alvo (TP): {alvo}</p>', unsafe_allow_html=True)
@@ -118,6 +106,5 @@ else:
 st.write("---")
 st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')} (Atualiza a cada 10s)")
 
-# Loop de atualização
 time.sleep(10)
 st.rerun()
