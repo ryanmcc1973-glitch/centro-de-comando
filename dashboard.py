@@ -5,23 +5,89 @@ import requests
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="Painel de Trades", layout="wide", page_icon="📈")
+# ==========================================
+# CONFIGURAÇÃO DA PÁGINA (Visual Dark/Neon)
+# ==========================================
+st.set_page_config(page_title="Alpha Terminal", layout="wide", page_icon="👾")
 
+# CSS Customizado para deixar o painel com cara de "Terminal de Trading"
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: white; }
-    .trade-card { background-color: #1e1e1e; padding: 20px; border-radius: 12px; border-left: 6px solid #00ff00; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    .trade-card-short { border-left: 6px solid #ff4b4b; }
-    .title { font-size: 22px; font-weight: bold; margin-bottom: 5px; }
-    .pnl { font-size: 24px; font-weight: bold; color: #00ff00; }
-    .pnl-negative { color: #ff4b4b; }
-    .info { font-size: 14px; color: #aaaaaa; margin: 2px 0; }
+    /* Fundo geral */
+    .stApp {
+        background-color: #050505;
+        color: #00ffcc;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    
+    /* Header */
+    h1 {
+        color: #00ffcc;
+        text-align: center;
+        text-shadow: 0 0 10px #00ffcc;
+        border-bottom: 2px solid #00ffcc;
+        padding-bottom: 10px;
+    }
+    
+    /* Cards */
+    .trade-card {
+        background: linear-gradient(145deg, #0a0a0a, #111111);
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #333;
+        border-left: 8px solid #00ffcc; /* Verde Neon para Long */
+        margin-bottom: 25px;
+        box-shadow: 0 0 15px rgba(0, 255, 204, 0.1);
+        transition: 0.3s;
+    }
+    .trade-card:hover {
+        box-shadow: 0 0 25px rgba(0, 255, 204, 0.4);
+        transform: translateY(-2px);
+    }
+    
+    /* Card Short (Vermelho Neon) */
+    .trade-card-short {
+        border-left: 8px solid #ff0055;
+        box-shadow: 0 0 15px rgba(255, 0, 85, 0.1);
+    }
+    .trade-card-short:hover {
+        box-shadow: 0 0 25px rgba(255, 0, 85, 0.4);
+    }
+
+    /* Textos */
+    .title {
+        font-size: 26px;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 10px;
+    }
+    .pnl {
+        font-size: 28px;
+        font-weight: bold;
+        color: #00ffcc;
+        text-shadow: 0 0 8px #00ffcc;
+    }
+    .pnl-negative {
+        color: #ff0055;
+        text-shadow: 0 0 8px #ff0055;
+    }
+    .info {
+        font-size: 16px;
+        color: #aaaaaa;
+        margin: 5px 0;
+    }
+    .info-value {
+        color: #ffffff;
+        font-weight: bold;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# MUDANÇA AQUI PARA TESTE:
-st.title("📈 TESTE NOVO - CENTRO DE COMANDO")
+st.title("👾 ALPHA TERMINAL")
 
+# ==========================================
+# FUNÇÕES (Firebase e MEXC)
+# ==========================================
 def obter_preco_atual(ativo):
     simbolo_mexc = ativo.replace("/", "_")
     url = f"https://contract.mexc.com/api/v1/contract/ticker?symbol={simbolo_mexc}"
@@ -38,30 +104,48 @@ def carregar_trades_firebase():
     try:
         res = requests.get(url, timeout=5).json()
         if res:
-            return list(res.values())
+            # Pega a lista de valores do Firebase
+            lista_trades = list(res.values())
+            # OPÇÃO: Descomente a linha abaixo se quiser mostrar APENAS os trades mais recentes
+            # lista_trades = lista_trades[-10:] 
+            return lista_trades
         return []
     except Exception as e:
-        st.error(f"Erro ao conectar no Firebase: {e}")
+        st.error(f"Erro de conexão com o Banco: {e}")
         return []
 
+# ==========================================
+# LÓGICA PRINCIPAL
+# ==========================================
 trades = carregar_trades_firebase()
 
 if not trades:
-    st.info("Nenhum trade aberto no momento. Os robôs estão vigiando o mercado.")
+    st.markdown("<h3 style='text-align:center; color:#666;'>Nenhum sinal ativo no momento. Aguardando o Alpha...</h3>", unsafe_allow_html=True)
 else:
+    # Ordena para os mais recentes primeiro (se houver timestamp, ou apenas inverte a lista)
+    trades.reverse()
+    
     for trade in trades:
-        preco_atual = obter_preco_atual(trade.get("ativo", ""))
+        ativo = trade.get("ativo", "").replace("_", "/")
+        if not ativo: continue
+
+        preco_atual = obter_preco_atual(ativo)
         
+        # Se a MEXC não tiver o preço (ex: ação AAPLSTOCK), usa o preço da entrada para não zerar o card
         if preco_atual is None:
-            continue
+            preco_atual = float(trade.get("entrada", 0))
+            preco_real = False
+        else:
+            preco_real = True
 
         entrada = float(trade.get("entrada", 0))
         alvo = float(trade.get("alvo", 0))
-        
-        if entrada == 0 or alvo == 0:
-            continue
+        direcao = trade.get("direcao", "LONG")
 
-        if trade.get("direcao") == "LONG":
+        if entrada == 0 or alvo == 0: continue
+
+        # Cálculos
+        if direcao == "LONG":
             progresso = ((preco_atual - entrada) / (alvo - entrada)) * 100 if alvo > entrada else 0
             pnl_pct = ((preco_atual - entrada) / entrada) * 100
         else:
@@ -70,42 +154,36 @@ else:
             
         progresso_barra = max(0.0, min(100.0, progresso))
         
-        card_class = "trade-card" if trade.get("direcao") == "LONG" else "trade-card trade-card-short"
-        emoji_seta = "🟢" if trade.get("direcao") == "LONG" else "🔴"
+        # Visual
+        card_class = "trade-card" if direcao == "LONG" else "trade-card trade-card-short"
+        emoji = "🟢" if direcao == "LONG" else "🔴"
         pnl_class = "pnl" if pnl_pct >= 0 else "pnl pnl-negative"
+        preco_icon = "⚡" if preco_real else "⚠️(Preço Mock)"
         
+        # Renderiza o Card
         with st.container():
             st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([2, 1.5, 1.5])
             
-            col_imagem, col1, col2, col3 = st.columns([1, 3, 2, 2])
-            
-            with col_imagem:
-                img_nome = trade.get("imagem", "alpha.png")
-                if os.path.exists(img_nome):
-                    st.image(img_nome, width=70)
-                else:
-                    st.markdown("<h1 style='text-align: center;'>🤖</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; font-size:12px; color:#aaa;'>{trade.get('robo', 'Robô')}</p>", unsafe_allow_html=True)
-
             with col1:
-                st.markdown(f'<p class="title">{emoji_seta} {trade.get("ativo", "Ativo")} ({trade.get("direcao", "")})</p>', unsafe_allow_html=True)
-                st.markdown(f'<p class="info">Entrada: {entrada}</p>', unsafe_allow_html=True)
-                st.markdown(f'<p class="info">Preço Atual: {preco_atual} 🔄</p>', unsafe_allow_html=True)
-                st.markdown(f'<p class="info">Alvo (TP): {alvo}</p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="title">{emoji} {ativo} ({direcao})</p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="info">Entrada: <span class="info-value">{entrada}</span></p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="info">Preço Atual: <span class="info-value">{preco_atual:.4f} {preco_icon}</span></p>', unsafe_allow_html=True)
+                st.markdown(f'<p class="info">Alvo: <span class="info-value">{alvo}</span></p>', unsafe_allow_html=True)
                 
             with col2:
                 st.markdown('<p class="info">Progresso do Alvo</p>', unsafe_allow_html=True)
                 st.progress(progresso_barra / 100)
-                st.write(f"{progresso:.1f}% atingido")
+                st.write(f"{progresso:.1f}%")
                 
             with col3:
-                st.markdown('<p class="info">Resultado (Spot)</p>', unsafe_allow_html=True)
+                st.markdown('<p class="info">PnL Parcial</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="{pnl_class}">{pnl_pct:+.2f}%</p>', unsafe_allow_html=True)
                 
             st.markdown('</div>', unsafe_allow_html=True)
 
 st.write("---")
-st.caption(f"Última atualização: {datetime.now().strftime('%H:%M:%S')} (Atualiza a cada 10s)")
+st.caption(f"Alpha Terminal v2.0 | Atualiza a cada 10s | Última leitura: {datetime.now().strftime('%H:%M:%S')}")
 
 time.sleep(10)
 st.rerun()
