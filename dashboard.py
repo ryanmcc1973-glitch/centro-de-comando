@@ -19,7 +19,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📈 Meu Centro de Comando (Tempo Real)")
+# MUDANÇA AQUI PARA TESTE:
+st.title("📈 TESTE NOVO - CENTRO DE COMANDO")
 
 def obter_preco_atual(ativo):
     simbolo_mexc = ativo.replace("/", "_")
